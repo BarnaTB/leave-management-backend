@@ -1,0 +1,8 @@
+package ist.leaves.dto;
+
+import jakarta.validation.constraints.NotBlank;
+
+public record LeaveTypeRequest(
+        @NotBlank String name,
+        String description
+) {}

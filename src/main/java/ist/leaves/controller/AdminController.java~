@@ -1,0 +1,90 @@
+package ist.leaves.controller;
+
+import ist.leaves.dto.DepartmentLeaveReportDTO;
+import ist.leaves.dto.EmployeeLeaveReportDTO;
+import ist.leaves.dto.LeaveBalanceAdjustmentRequest;
+import ist.leaves.dto.LeaveTypeReportDTO;
+import ist.leaves.entity.LeaveType;
+import ist.leaves.service.AdminService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/admin")
+@PreAuthorize("hasRole('ADMIN')")
+public class AdminController {
+
+    private final AdminService adminService;
+
+    public AdminController(AdminService adminService) {
+        this.adminService = adminService;
+    }
+
+    @PostMapping("/leave-types")
+    public LeaveType createLeaveType(@RequestBody LeaveType leaveType) {
+        return adminService.createLeaveType(leaveType);
+    }
+
+    @PutMapping("/leave-types/{id}")
+    public LeaveType updateLeaveType(@PathVariable Long id, @RequestBody LeaveType leaveType) {
+        return adminService.updateLeaveType(id, leaveType);
+    }
+
+    @DeleteMapping("/leave-types/{id}")
+    public String deleteLeaveType(@PathVariable Long id) {
+        adminService.deleteLeaveType(id);
+        return "Leave type deleted successfully.";
+    }
+
+    @GetMapping("/employee/{employeeId}/report")
+    public ResponseEntity<String> getEmployeeLeaveReportAsCSV(@PathVariable Long employeeId) {
+        List<EmployeeLeaveReportDTO> reports = adminService.getEmployeeLeaveReport(employeeId);
+        StringBuilder csvContent = new StringBuilder("Employee Name,Leave Type,Start Date,End Date,Status\n");
+        for (EmployeeLeaveReportDTO report : reports) {
+            csvContent.append(report.getEmployeeName()).append(",")
+                    .append(report.getLeaveType()).append(",")
+                    .append(report.getStartDate()).append(",")
+                    .append(report.getEndDate()).append(",")
+                    .append(report.getStatus()).append("\n");
+        }
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=employee_leave_report.csv")
+                .body(csvContent.toString());
+    }
+
+    @GetMapping("/department/{departmentId}/report")
+    public ResponseEntity<String> getDepartmentLeaveReportAsCSV(@PathVariable Long departmentId) {
+        DepartmentLeaveReportDTO report = adminService.getDepartmentLeaveReport(departmentId);
+        StringBuilder csvContent = new StringBuilder("Department Name,Employee Name,Leave Type,Start Date,End Date,Status\n");
+        for (EmployeeLeaveReportDTO employeeReport : report.getEmployeeLeaveReports()) {
+            csvContent.append(report.getDepartmentName()).append(",")
+                    .append(employeeReport.getEmployeeName()).append(",")
+                    .append(employeeReport.getLeaveType()).append(",")
+                    .append(employeeReport.getStartDate()).append(",")
+                    .append(employeeReport.getEndDate()).append(",")
+                    .append(employeeReport.getStatus()).append("\n");
+        }
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=department_leave_report.csv")
+                .body(csvContent.toString());
+    }
+
+    @GetMapping("/leave-type/{leaveTypeId}/report")
+    public ResponseEntity<String> getLeaveTypeReportAsCSV(@PathVariable Long leaveTypeId) {
+        LeaveTypeReportDTO report = adminService.getLeaveTypeReport(leaveTypeId);
+        StringBuilder csvContent = new StringBuilder("Leave Type,Employee Name,Start Date,End Date,Status\n");
+        for (EmployeeLeaveReportDTO employeeReport : report.getEmployeeLeaveReports()) {
+            csvContent.append(report.getLeaveType()).append(",")
+                    .append(employeeReport.getEmployeeName()).append(",")
+                    .append(employeeReport.getStartDate()).append(",")
+                    .append(employeeReport.getEndDate()).append(",")
+                    .append(employeeReport.getStatus()).append("\n");
+        }
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=leave_type_report.csv")
+                .body(csvContent.toString());
+    }
+}

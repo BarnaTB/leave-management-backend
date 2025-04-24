@@ -1,0 +1,57 @@
+package ist.leaves.service;
+
+import ist.leaves.entity.Employee;
+import ist.leaves.entity.LeaveBalance;
+import ist.leaves.entity.LeaveType;
+import ist.leaves.exception.ResourceNotFoundException;
+import ist.leaves.repository.EmployeeRepository;
+import ist.leaves.repository.LeaveBalanceRepository;
+import ist.leaves.repository.LeaveTypeRepository;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+public class LeaveBalanceService {
+
+    private final LeaveBalanceRepository leaveBalanceRepository;
+    private final EmployeeRepository employeeRepository;
+    private final LeaveTypeRepository leaveTypeRepository;
+
+    public LeaveBalanceService(LeaveBalanceRepository leaveBalanceRepository,
+                               EmployeeRepository employeeRepository,
+                               LeaveTypeRepository leaveTypeRepository) {
+        this.leaveBalanceRepository = leaveBalanceRepository;
+        this.employeeRepository = employeeRepository;
+        this.leaveTypeRepository = leaveTypeRepository;
+    }
+
+    @Scheduled(cron = "0 0 0 * * ?") // Run daily at midnight
+    public void updateDailyLeaveBalance() {
+        List<Employee> employees = employeeRepository.findAll();
+        List<LeaveType> leaveTypes = leaveTypeRepository.findAll();
+
+        employees.forEach(employee ->
+                leaveTypes.forEach(leaveType -> {
+                    LeaveBalance balance = leaveBalanceRepository
+                            .findByEmployeeAndLeaveType(employee, leaveType)
+                            .orElseGet(() -> createNewBalance(employee, leaveType));
+
+                    double dailyAccrual = leaveType.getAccrualRate() / 30; // Assuming monthly accrual divided by 30 days
+                    balance.setCurrentBalance(balance.getCurrentBalance() + dailyAccrual);
+                    leaveBalanceRepository.save(balance);
+                })
+        );
+    }
+
+    private LeaveBalance createNewBalance(Employee employee, LeaveType leaveType) {
+        LeaveBalance balance = new LeaveBalance();
+        balance.setEmployee(employee);
+        balance.setLeaveType(leaveType);
+        balance.setCurrentBalance(0);
+        balance.setAccruedThisYear(0);
+        balance.setCarriedOver(0);
+        return balance;
+    }
+}

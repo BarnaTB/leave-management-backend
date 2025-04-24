@@ -1,0 +1,4 @@
+package ist.leaves.dto;
+
+public class LeaveType {
+}

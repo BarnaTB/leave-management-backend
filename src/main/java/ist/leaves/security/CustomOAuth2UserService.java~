@@ -1,0 +1,49 @@
+package ist.leaves.security;
+
+@Service
+public class CustomOAuth2UserService extends DefaultOAuth2UserService {
+
+    private final EmployeeRepository employeeRepository;
+    private final Environment environment;
+
+    public CustomOAuth2UserService(EmployeeRepository employeeRepository,
+                                   Environment environment) {
+        this.employeeRepository = employeeRepository;
+        this.environment = environment;
+    }
+
+    @Override
+    public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
+        OAuth2User oAuth2User = super.loadUser(userRequest);
+
+        // Domain validation for production
+        if (Arrays.asList(environment.getActiveProfiles()).contains("prod")) {
+            String email = oAuth2User.getAttribute("email");
+            if (email == null || !email.endsWith("@ist.com")) {
+                throw new OAuth2AuthenticationException("Invalid email domain");
+            }
+        }
+
+        Map<String, Object> attributes = oAuth2User.getAttributes();
+        return processOAuth2User(userRequest, attributes);
+    }
+
+    private OAuth2User processOAuth2User(OAuth2UserRequest userRequest,
+                                         Map<String, Object> attributes) {
+        String email = (String) attributes.get("email");
+        Optional<Employee> userOptional = employeeRepository.findByEmail(email);
+
+        Employee employee = userOptional.orElseGet(() -> registerNewUser(attributes));
+        return new CustomOAuth2User(employee, attributes);
+    }
+
+    private Employee registerNewUser(Map<String, Object> attributes) {
+        Employee employee = new Employee();
+        employee.setMicrosoftId((String) attributes.get("sub"));
+        employee.setEmail((String) attributes.get("email"));
+        employee.setName((String) attributes.get("name"));
+        employee.setAvatarUrl((String) attributes.get("picture"));
+        employee.setRole(Role.USER); // Default role
+        return employeeRepository.save(employee);
+    }
+}

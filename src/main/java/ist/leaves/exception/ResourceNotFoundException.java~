@@ -1,0 +1,4 @@
+package ist.leaves.exception;
+
+public class ResourceNotFoundException {
+}

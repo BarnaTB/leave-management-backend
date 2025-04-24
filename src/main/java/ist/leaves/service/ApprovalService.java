@@ -1,0 +1,35 @@
+package ist.leaves.service;
+
+import ist.leaves.entity.LeaveApplication;
+import ist.leaves.entity.LeaveStatus;
+import ist.leaves.exception.ResourceNotFoundException;
+import ist.leaves.repository.LeaveApplicationRepository;
+import org.springframework.stereotype.Service;
+
+@Service
+public class ApprovalService {
+
+    private final LeaveApplicationRepository leaveApplicationRepository;
+
+    public ApprovalService(LeaveApplicationRepository leaveApplicationRepository) {
+        this.leaveApplicationRepository = leaveApplicationRepository;
+    }
+
+    public void approveLeave(Long applicationId, String approverComments) {
+        LeaveApplication application = leaveApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Leave application not found"));
+
+        application.setStatus(LeaveStatus.APPROVED);
+        application.setApproverComments(approverComments);
+        leaveApplicationRepository.save(application);
+    }
+
+    public void rejectLeave(Long applicationId, String approverComments) {
+        LeaveApplication application = leaveApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Leave application not found"));
+
+        application.setStatus(LeaveStatus.REJECTED);
+        application.setApproverComments(approverComments);
+        leaveApplicationRepository.save(application);
+    }
+}

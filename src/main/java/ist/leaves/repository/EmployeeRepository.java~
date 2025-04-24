@@ -1,0 +1,13 @@
+package ist.leaves.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import ist.leaves.entity.Department;
+import org.springframework.data.jpa.repository.JpaRepository;
+import ist.leaves.entity.Employee;
+
+public interface EmployeeRepository extends JpaRepository<Employee, Long> {
+    Optional<Employee> findByEmail(String email);
+    List<Employee> findByDepartment(Department department);
+}

@@ -1,0 +1,142 @@
+package ist.leaves.service;
+
+import ist.leaves.dto.LeaveApplicationRequest;
+import ist.leaves.dto.LeaveBalanceDTO;
+import ist.leaves.entity.*;
+import ist.leaves.exception.ResourceNotFoundException;
+import ist.leaves.repository.EmployeeRepository;
+import ist.leaves.repository.LeaveApplicationRepository;
+import ist.leaves.repository.LeaveTypeRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+@Service
+public class LeaveApplicationService {
+
+    private final LeaveApplicationRepository leaveApplicationRepository;
+    private final EmployeeRepository employeeRepository;
+    private final LeaveTypeRepository leaveTypeRepository;
+
+    private final Path documentStoragePath = Paths.get("uploads/documents");
+
+    public LeaveApplicationService(LeaveApplicationRepository leaveApplicationRepository,
+                                   EmployeeRepository employeeRepository,
+                                   LeaveTypeRepository leaveTypeRepository) {
+        this.leaveApplicationRepository = leaveApplicationRepository;
+        this.employeeRepository = employeeRepository;
+        this.leaveTypeRepository = leaveTypeRepository;
+    }
+
+    @Transactional
+    public LeaveApplication applyForLeave(LeaveApplicationRequest request) throws IOException {
+        Employee employee = employeeRepository.findById(request.getEmployeeId())
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+
+        LeaveType leaveType = leaveTypeRepository.findById(request.getLeaveTypeId())
+                .orElseThrow(() -> new ResourceNotFoundException("Leave type not found"));
+
+        if (leaveType.isRequiresDocument() && request.getDocument() == null) {
+            throw new IllegalArgumentException("This leave type requires a supporting document.");
+        }
+
+        LeaveApplication leaveApplication = new LeaveApplication();
+        leaveApplication.setEmployee(employee);
+        leaveApplication.setLeaveType(leaveType);
+        leaveApplication.setStartDate(request.getStartDate());
+        leaveApplication.setEndDate(request.getEndDate());
+        leaveApplication.setHalfDay(request.isHalfDay());
+        leaveApplication.setReason(request.getReason());
+        leaveApplication.setStatus(LeaveStatus.PENDING_MANAGER_APPROVAL);
+
+        if (request.getDocument() != null) {
+            String documentPath = saveDocument(request.getDocument());
+            leaveApplication.setDocumentPath(documentPath);
+        }
+
+        return leaveApplicationRepository.save(leaveApplication);
+    }
+
+    @Transactional
+    public LeaveApplication approveByManager(Long applicationId, String approverComments) {
+        LeaveApplication leaveApplication = leaveApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Leave application not found"));
+
+        if (leaveApplication.getStatus() != LeaveStatus.PENDING_MANAGER_APPROVAL) {
+            throw new IllegalStateException("Leave application is not pending manager approval.");
+        }
+
+        leaveApplication.setStatus(LeaveStatus.PENDING_ADMIN_APPROVAL);
+        leaveApplication.setApproverComments(approverComments);
+
+        return leaveApplicationRepository.save(leaveApplication);
+    }
+
+    @Transactional
+    public LeaveApplication approveByAdmin(Long applicationId, String approverComments) {
+        LeaveApplication leaveApplication = leaveApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Leave application not found"));
+
+        if (leaveApplication.getStatus() != LeaveStatus.PENDING_ADMIN_APPROVAL) {
+            throw new IllegalStateException("Leave application is not pending admin approval.");
+        }
+
+        leaveApplication.setStatus(LeaveStatus.APPROVED);
+        leaveApplication.setApproverComments(approverComments);
+
+        return leaveApplicationRepository.save(leaveApplication);
+    }
+
+    @Transactional
+    public LeaveApplication rejectLeave(Long applicationId, String approverComments) {
+        LeaveApplication leaveApplication = leaveApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Leave application not found"));
+
+        leaveApplication.setStatus(LeaveStatus.REJECTED);
+        leaveApplication.setApproverComments(approverComments);
+
+        return leaveApplicationRepository.save(leaveApplication);
+    }
+
+    private String saveDocument(MultipartFile document) throws IOException {
+        if (!Files.exists(documentStoragePath)) {
+            Files.createDirectories(documentStoragePath);
+        }
+
+        Path filePath = documentStoragePath.resolve(Objects.requireNonNull(document.getOriginalFilename()));
+        Files.write(filePath, document.getBytes());
+        return filePath.toString();
+    }
+
+    // Fetch leave history for an employee
+    public List<LeaveApplication> getLeaveHistory(Long employeeId) {
+        return leaveApplicationRepository.findByEmployeeId(employeeId);
+    }
+
+    // Calculate leave balance for an employee
+    public List<LeaveBalanceDTO> getLeaveBalances(Long employeeId) {
+        List<LeaveType> leaveTypes = leaveTypeRepository.findAll();
+        List<LeaveBalanceDTO> leaveBalances = new ArrayList<>();
+
+        for (LeaveType leaveType : leaveTypes) {
+            List<LeaveApplication> leaveApplications = leaveApplicationRepository.findByEmployeeId(employeeId);
+            int totalLeavesTaken = leaveApplications.stream()
+                    .filter(app -> app.getLeaveType().getId().equals(leaveType.getId()) && app.getStatus().name().equals("APPROVED"))
+                    .mapToInt(app -> app.isHalfDay() ? 1 : (int) (app.getEndDate().toEpochDay() - app.getStartDate().toEpochDay() + 1))
+                    .sum();
+
+            int accruedLeaves = (int) leaveType.getAccrualRate(); // Assuming accrual rate is defined per leave type
+            leaveBalances.add(new LeaveBalanceDTO(leaveType.getName(), accruedLeaves - totalLeavesTaken));
+        }
+
+        return leaveBalances;
+    }
+}

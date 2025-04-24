@@ -1,0 +1,142 @@
+package ist.leaves.service;
+
+import ist.leaves.dto.DepartmentLeaveReportDTO;
+import ist.leaves.dto.EmployeeLeaveReportDTO;
+import ist.leaves.dto.LeaveBalanceAdjustmentRequest;
+import ist.leaves.dto.LeaveTypeReportDTO;
+import ist.leaves.entity.Department;
+import ist.leaves.entity.Employee;
+import ist.leaves.entity.LeaveType;
+import ist.leaves.entity.Role;
+import ist.leaves.exception.ResourceNotFoundException;
+import ist.leaves.repository.DepartmentRepository;
+import ist.leaves.repository.EmployeeRepository;
+import ist.leaves.repository.LeaveApplicationRepository;
+import ist.leaves.repository.LeaveTypeRepository;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+public class AdminService {
+
+    private final EmployeeRepository employeeRepository;
+    private final DepartmentRepository departmentRepository;
+    private final LeaveApplicationRepository leaveApplicationRepository;
+    private final LeaveTypeRepository leaveTypeRepository;
+
+    public AdminService(EmployeeRepository employeeRepository,
+                        DepartmentRepository departmentRepository,
+                        LeaveApplicationRepository leaveApplicationRepository,
+                        LeaveTypeRepository leaveTypeRepository) {
+        this.employeeRepository = employeeRepository;
+        this.departmentRepository = departmentRepository;
+        this.leaveApplicationRepository = leaveApplicationRepository;
+        this.leaveTypeRepository = leaveTypeRepository;
+    }
+
+    public LeaveType createLeaveType(LeaveType leaveType) {
+        return leaveTypeRepository.save(leaveType);
+    }
+
+    public LeaveType updateLeaveType(Long id, LeaveType leaveType) {
+        LeaveType existingLeaveType = leaveTypeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Leave type not found"));
+        existingLeaveType.setName(leaveType.getName());
+        existingLeaveType.setDescription(leaveType.getDescription());
+        existingLeaveType.setAccrualRate(leaveType.getAccrualRate());
+        existingLeaveType.setMaxCarryForward(leaveType.getMaxCarryForward());
+        return leaveTypeRepository.save(existingLeaveType);
+    }
+
+    public void deleteLeaveType(Long id) {
+        LeaveType leaveType = leaveTypeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Leave type not found"));
+        leaveTypeRepository.delete(leaveType);
+    }
+
+    public void adjustLeaveBalance(LeaveBalanceAdjustmentRequest request) {
+        Employee employee = employeeRepository.findById(request.getEmployeeId())
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+        // Logic to adjust leave balance (e.g., update a leave balance field in Employee entity)
+        // Assuming Employee has a `leaveBalance` field
+        employee.setLeaveBalance(employee.getLeaveBalance() + request.getAdjustmentAmount());
+        employeeRepository.save(employee);
+    }
+
+    public String generateReports(String reportType) {
+        // Placeholder for report generation logic
+        // Example: Generate CSV/Excel reports based on the reportType
+        return "Report generated for type: " + reportType;
+    }
+
+    public List<EmployeeLeaveReportDTO> getEmployeeLeaveReport(Long employeeId) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+
+        return leaveApplicationRepository.findByEmployeeId(employeeId).stream()
+                .map(leave -> {
+                    EmployeeLeaveReportDTO report = new EmployeeLeaveReportDTO();
+                    report.setEmployeeName(employee.getName());
+                    report.setLeaveType(leave.getLeaveType().getName());
+                    report.setStartDate(leave.getStartDate());
+                    report.setEndDate(leave.getEndDate());
+                    report.setStatus(leave.getStatus().name());
+                    return report;
+                })
+                .collect(Collectors.toList());
+    }
+
+    public DepartmentLeaveReportDTO getDepartmentLeaveReport(Long departmentId) {
+        Department department = departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
+
+        List<EmployeeLeaveReportDTO> employeeReports = department.getEmployees().stream()
+                .flatMap(employee -> leaveApplicationRepository.findByEmployeeId(employee.getId()).stream()
+                        .map(leave -> {
+                            EmployeeLeaveReportDTO report = new EmployeeLeaveReportDTO();
+                            report.setEmployeeName(employee.getName());
+                            report.setLeaveType(leave.getLeaveType().getName());
+                            report.setStartDate(leave.getStartDate());
+                            report.setEndDate(leave.getEndDate());
+                            report.setStatus(leave.getStatus().name());
+                            return report;
+                        }))
+                .collect(Collectors.toList());
+
+        DepartmentLeaveReportDTO report = new DepartmentLeaveReportDTO();
+        report.setDepartmentName(department.getName());
+        report.setEmployeeLeaveReports(employeeReports);
+        return report;
+    }
+
+    public LeaveTypeReportDTO getLeaveTypeReport(Long leaveTypeId) {
+        LeaveType leaveType = leaveTypeRepository.findById(leaveTypeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Leave type not found"));
+
+        List<EmployeeLeaveReportDTO> employeeReports = leaveApplicationRepository.findByLeaveType(leaveType).stream()
+                .map(leave -> {
+                    EmployeeLeaveReportDTO report = new EmployeeLeaveReportDTO();
+                    report.setEmployeeName(leave.getEmployee().getName());
+                    report.setLeaveType(leaveType.getName());
+                    report.setStartDate(leave.getStartDate());
+                    report.setEndDate(leave.getEndDate());
+                    report.setStatus(leave.getStatus().name());
+                    return report;
+                })
+                .collect(Collectors.toList());
+
+        LeaveTypeReportDTO report = new LeaveTypeReportDTO();
+        report.setLeaveType(leaveType.getName());
+        report.setEmployeeLeaveReports(employeeReports);
+        return report;
+    }
+
+    public void updateEmployeeRole(Long employeeId, String newRole) {
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+        employee.setRole(Role.valueOf(newRole.toUpperCase())); // Assuming `Role` is an enum
+        employeeRepository.save(employee);
+    }
+}

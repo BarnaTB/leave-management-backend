@@ -1,0 +1,36 @@
+package ist.leaves.controller;
+
+import ist.leaves.dto.LeaveApplicationRequest;
+import ist.leaves.entity.LeaveApplication;
+import ist.leaves.service.LeaveApplicationService;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/employee")
+@PreAuthorize("hasRole('STAFF')")
+public class EmployeeController {
+
+    private final LeaveApplicationService leaveApplicationService;
+
+    public EmployeeController(LeaveApplicationService leaveApplicationService) {
+        this.leaveApplicationService = leaveApplicationService;
+    }
+
+    @GetMapping("/leave-balance")
+    public List<LeaveApplication> getLeaveBalance(@RequestParam Long employeeId) {
+        return leaveApplicationService.getLeaveBalance(employeeId);
+    }
+
+    @PostMapping("/apply-leave")
+    public LeaveApplication applyForLeave(@RequestBody LeaveApplicationRequest request) {
+        return leaveApplicationService.applyForLeave(request);
+    }
+
+    @GetMapping("/leave-history")
+    public List<LeaveApplication> getLeaveHistory(@RequestParam Long employeeId) {
+        return leaveApplicationService.getLeaveHistory(employeeId);
+    }
+}
