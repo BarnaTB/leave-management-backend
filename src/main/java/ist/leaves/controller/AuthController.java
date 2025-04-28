@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ist.leaves.entity.Employee;
 
+
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -39,10 +40,4 @@ public class AuthController {
                 "role", employee.getRole().name()
         ));
     }
-
-//    @GetMapping("/token")
-//    public Map<String, String> getToken(@AuthenticationPrincipal CustomOAuth2User customOAuth2User) {
-//        String token = jwtTokenProvider.generateToken(customOAuth2User.getEmail());
-//        return Map.of("token", token);
-//    }
 }
